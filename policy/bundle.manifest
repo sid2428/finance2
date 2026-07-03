@@ -1,0 +1,8 @@
+{
+  "revision": "aegis-ruleset-2026.07.0",
+  "roots": ["aegis/jurisdiction", "fatf"],
+  "metadata": {
+    "description": "AEGIS deterministic policy bundle (Feature 1 firewall + FATF data).",
+    "note": "Blue/green canaried before promotion; revision equals the ruleset_version pinned into every decision envelope."
+  }
+}

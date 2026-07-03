@@ -1,0 +1,18 @@
+{
+  "source": "AEGIS demo consolidated list (fictional — do not use in production)",
+  "as_of": "2026-07-01",
+  "entries": [
+    {"entity_id": "SDN-001", "name": "Ivan Petrov Volkov", "list": "OFAC_SDN", "is_pep": false, "kind": "individual"},
+    {"entity_id": "SDN-002", "name": "Rossiya Trade Holdings", "list": "OFAC_SDN", "is_pep": false, "kind": "entity"},
+    {"entity_id": "SDN-003", "name": "Kim Jong Chol", "list": "UN_SC", "is_pep": true, "kind": "individual"},
+    {"entity_id": "SDN-004", "name": "Bank Melli Iran", "list": "OFAC_SDN", "is_pep": false, "kind": "entity"},
+    {"entity_id": "EU-101", "name": "Nordwind Logistik GmbH", "list": "EU_CONSOLIDATED", "is_pep": false, "kind": "entity"},
+    {"entity_id": "PEP-201", "name": "Adaeze Okonkwo", "list": "PEP", "is_pep": true, "kind": "individual"}
+  ],
+  "ownership": [
+    {"owner_id": "SDN-002", "owned_id": "SHELL-900", "pct": 0.30},
+    {"owner_id": "SDN-001", "owned_id": "SHELL-900", "pct": 0.25},
+    {"owner_id": "CLEAN-500", "owned_id": "SHELL-900", "pct": 0.45},
+    {"owner_id": "SDN-004", "owned_id": "SHELL-901", "pct": 0.20}
+  ]
+}

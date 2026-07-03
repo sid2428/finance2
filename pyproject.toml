@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aegis"
+version = "0.1.0"
+description = "Agentic Enforcement, Governance & Interdiction of Settlement — a fail-closed compliance control plane for AP2 agent-to-agent payments."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "pydantic>=2.6",
+    "cryptography>=42.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "httpx>=0.27"]
+
+[tool.setuptools.packages.find]
+include = ["aegis*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
