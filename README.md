@@ -1,5 +1,13 @@
 # AEGIS — reference implementation
 
+[![CI](https://github.com/sid2428/finance2/actions/workflows/ci.yml/badge.svg)](https://github.com/sid2428/finance2/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
+
+> *The protocols decide whether a payment is authorized. AEGIS decides whether
+> it is lawful. Fail-closed, deterministic, and rail-agnostic — the compliance
+> control plane the agentic stack forgot to build.*
+
 **Agentic Enforcement, Governance & Interdiction of Settlement.** A fail-closed,
 deterministic compliance & regulation control plane that sits between an AP2
 payment authorization and the settlement rail. See [`AEGIS.md`](AEGIS.md) for the

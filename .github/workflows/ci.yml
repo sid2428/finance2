@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: tests (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Byte-compile all modules
+        run: python -m compileall -q aegis demo tests
+
+      - name: Full test suite (compliance + AP2 tracks)
+        run: python -m pytest -q
+
+      # The fuzzer invariant is the project's standing red team: a valid
+      # mandate must verify and every adversarial variant must be rejected
+      # (escaped == []). A regression here fails the build.
+      - name: Adversarial suite (fuzzer invariant)
+        run: python -m pytest -q tests/test_ap2_sandbox.py tests/test_adversarial.py tests/test_orchestrator.py
+
+      - name: Demos run end-to-end
+        run: |
+          python -m demo.demo
+          python -m demo.advanced_demo
+
+  audit:
+    name: dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: pip-audit (known-vulnerability scan)
+        run: |
+          python -m pip install --upgrade pip pip-audit
+          pip install -r requirements.txt
+          pip-audit || true   # advisory for now; will become blocking at first release
