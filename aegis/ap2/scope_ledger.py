@@ -75,20 +75,44 @@ class Reservation:
     sd_hash: str
 
 
-class ScopeLedger:
-    """Tamper-evident scope state the agent's LLM cannot write to."""
+class MemoryScopeStore:
+    """Default demo scope store — nothing survives the process (by design).
+    ``aegis.storage.SqliteScopeStore`` is the durable implementation."""
 
-    def __init__(self, verifier_pub: bytes):
-        self._verifier_pub = verifier_pub
+    def __init__(self) -> None:
         self._scopes: dict[str, OpenMandateScope] = {}
 
+    def get(self, mandate_id: str) -> OpenMandateScope | None:
+        return self._scopes.get(mandate_id)
+
+    def put(self, scope: OpenMandateScope) -> None:
+        self._scopes[scope.mandate_id] = scope
+
+
+class ScopeLedger:
+    """Tamper-evident scope state the agent's LLM cannot write to.
+
+    All mutations flow through this state machine and are written back to the
+    store, so with a durable store no reservation or receipted reduction is
+    lost across restarts."""
+
+    def __init__(self, verifier_pub: bytes, store=None):
+        self._verifier_pub = verifier_pub
+        self._store = store if store is not None else MemoryScopeStore()
+
     def open_scope(self, mandate_id: str, count: int, value_usd: float) -> OpenMandateScope:
+        existing = self._store.get(mandate_id)
+        if existing is not None:
+            return existing          # never silently reset live authority
         scope = OpenMandateScope(mandate_id, count, value_usd)
-        self._scopes[mandate_id] = scope
+        self._store.put(scope)
         return scope
 
     def scope(self, mandate_id: str) -> OpenMandateScope:
-        return self._scopes[mandate_id]
+        scope = self._store.get(mandate_id)
+        if scope is None:
+            raise KeyError(f"no scope for open mandate {mandate_id!r}")
+        return scope
 
     def reserve(self, scope: OpenMandateScope, closed_sd_hash: str,
                 amount_usd: float) -> Reservation:
@@ -105,6 +129,7 @@ class ScopeLedger:
         if amount_usd > scope.remaining_value_usd + 1e-9:
             raise ScopeExceeded("beyond remaining value authority")
         scope.outstanding.add(closed_sd_hash)
+        self._store.put(scope)
         return Reservation(scope.mandate_id, closed_sd_hash)
 
     def apply_receipt(self, scope: OpenMandateScope, receipt: MandateReceipt) -> None:
