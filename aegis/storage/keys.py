@@ -75,6 +75,9 @@ class PersistentKeyRing(KeyRing):
         super().register_pub(did, public_key_raw)
         self._dir.put(did, public_key_raw)
 
+    def close(self) -> None:
+        self._dir.close()
+
 
 def load_or_create_signing_key(path: Path | str) -> tuple[Ed25519PrivateKey, bytes]:
     """Load the ledger signing key from ``path`` or mint one. DEMO-GRADE —

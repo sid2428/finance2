@@ -7,7 +7,7 @@ Sequenced by dependency; checkboxes track shipped work.
 
 - [x] Governance: LICENSE (Apache-2.0), CONTRIBUTING, SECURITY, CODE_OF_CONDUCT
 - [x] CI: tests + adversarial suite on every push
-- [ ] **WS3 Persistence**: storage interfaces; SQLite append-only WORM ledger
+- [x] **WS3 Persistence**: storage interfaces; SQLite append-only WORM ledger
       (chain verified on startup, fail-closed on corruption); durable velocity
       counters; cross-restart deterministic replay; per-decision evidence
       export verifiable with only the public key

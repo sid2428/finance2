@@ -15,11 +15,13 @@ here the app is transport-agnostic so it can be exercised locally / in tests.
 
 from __future__ import annotations
 
+import os
 from collections import Counter
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+from ..ledger.evidence import export_evidence
 from ..models import MandateBundle, Verdict
 from ..pipeline.f5_risk_stepup import verify_quorum
 from ..runtime import AegisSystem, build_system
@@ -31,7 +33,8 @@ class StepUpApproval(BaseModel):
 
 
 def create_app(system: AegisSystem | None = None) -> FastAPI:
-    system = system or build_system()
+    # AEGIS_DATA_DIR selects durable mode (WS3); unset = in-memory demo mode.
+    system = system or build_system(os.environ.get("AEGIS_DATA_DIR") or None)
     app = FastAPI(title="AEGIS", version="0.1.0")
     app.state.aegis = system
 
@@ -57,6 +60,15 @@ def create_app(system: AegisSystem | None = None) -> FastAPI:
         if env is None:
             raise HTTPException(404, "unknown decision")
         return env.model_dump(mode="json")
+
+    @app.get("/v1/ledger/{decision_id}/evidence")
+    def evidence(decision_id: str):
+        """Self-contained evidence bundle, verifiable offline with only the
+        embedded public key (``python -m aegis.tools.verify_evidence``)."""
+        try:
+            return export_evidence(system.ledger, decision_id)
+        except KeyError:
+            raise HTTPException(404, "unknown decision")
 
     @app.post("/v1/ledger/{decision_id}/replay")
     def replay(decision_id: str):

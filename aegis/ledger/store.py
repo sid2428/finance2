@@ -80,6 +80,11 @@ class DecisionLedger:
     def signing_pub(self) -> bytes:
         return self._signing_pub
 
+    def close(self) -> None:
+        close = getattr(self._backend, "close", None)
+        if callable(close):
+            close()
+
     def head_hash(self) -> str:
         return self._entries[-1].this_hash if self._entries else GENESIS_HASH
 

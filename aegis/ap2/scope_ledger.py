@@ -139,8 +139,10 @@ class ScopeLedger:
         scope.outstanding.discard(h)
         if receipt.result == "success":
             if h in scope.consumed_hashes:
+                self._store.put(scope)  # persist the outstanding release
                 return  # idempotent
             scope.consumed_hashes.add(h)
             scope.remaining_count -= 1
             scope.remaining_value_usd -= receipt.amount_usd   # monotonic reduction
         # result == "error": authority released (outstanding discarded), no leak
+        self._store.put(scope)
