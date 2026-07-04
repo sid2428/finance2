@@ -92,10 +92,41 @@ The **fail-closed orchestrator** is `aegis/pipeline/orchestrator.py`; the
 | `POST /v1/mandates/evaluate` | Evaluate an AP2 mandate bundle → `DecisionEnvelope` |
 | `POST /v1/stepup/{id}/approve` | Contribute one quorum signature |
 | `GET  /v1/ledger/{decision_id}` | Full audit record |
+| `GET  /v1/ledger/{decision_id}/evidence` | Self-contained evidence bundle, verifiable offline with only the public key |
 | `POST /v1/ledger/{decision_id}/replay` | Determinism proof |
 | `GET  /v1/ledger` | Chain depth + integrity status |
 | `GET  /v1/sar/drafts` | Queued Suspicious Activity Reports |
 | `GET  /healthz` `/readyz` `/metrics` | Ops |
+
+## Durable mode and the screening data plane
+
+Demo mode (the default) is fully in-memory and zero-infrastructure. Two
+configuration seams turn the simulated parts real without touching call sites:
+
+**Durable state** — set `AEGIS_DATA_DIR` (or `build_system(data_dir=...)`):
+SQLite-backed append-only WORM decision ledger (UPDATE/DELETE rejected at the
+engine level; the full hash chain is re-verified on open and the system
+**refuses to start on corruption**), durable velocity counters and scope
+state, persistent DID directory. A decision recorded yesterday replays
+byte-for-byte today from durable state alone (`tests/test_persistence.py`),
+and every decision exports as a self-contained evidence bundle an auditor can
+verify with only the public key: `python -m aegis.tools.verify_evidence`.
+
+**Screening providers** — set `AEGIS_SCREENING_PROVIDER`:
+
+| Provider | Value | Notes |
+|---|---|---|
+| Built-in matcher over demo fixtures | `offline` (default) | zero infrastructure; static synthetic data |
+| OpenSanctions / yente | `yente` + `AEGIS_YENTE_URL` | real consolidated sanctions/PEP data; [commercial licensing](https://www.opensanctions.org/licensing/) applies |
+| Moov Watchman | `watchman` + `AEGIS_WATCHMAN_URL` | Apache-2.0, production-hardened OFAC screening |
+
+Every verdict records the list provenance (provider, dataset, version,
+refresh timestamp) **inside the signed envelope**. If the list data is older
+than the configured freshness bound, the decision **fails closed** with
+`AGENT.SANC.STALE_LIST`; if the provider is down, `AGENT.SANC.PROVIDER_UNAVAILABLE`.
+Most screening tools fail open on stale data — AEGIS does not. Provider
+responses are captured in the decision archive, so audit replay never makes a
+live data-plane call.
 
 ## Production stand-ins
 
@@ -106,11 +137,12 @@ sites:
 | Spec component | This build | Swap point |
 |---|---|---|
 | OPA/Rego policy engine | Python firewall mirroring `policy/*.rego` | `f1_jurisdiction.py` |
-| Redis velocity counters | in-memory sorted store | `aegis/state/velocity.py` |
-| PostgreSQL WORM ledger | in-memory list + JSONL sink | `aegis/ledger/store.py` |
+| Redis velocity counters | in-memory (demo) or SQLite (durable mode) | `aegis/state/velocity.py` · `aegis/storage/` |
+| PostgreSQL WORM ledger | in-memory (demo) or SQLite WORM (durable mode) | `aegis/ledger/store.py` · `aegis/storage/` |
+| Sanctions data feeds | fixtures (demo) or yente / Watchman | `aegis/screening/` |
 | ONNX risk/embedder models | deterministic scorers | `aegis/ml/` |
 | `jellyfish` fuzzy matching | pure-Python Jaro-Winkler + phonetic | `aegis/matching/fuzzy.py` |
-| HSM/KMS signing keys | `KeyRing` | `aegis/crypto.py` |
+| HSM/KMS signing keys | `KeyRing`; durable-mode key file is demo-grade custody (WS8 keystore planned) | `aegis/crypto.py` · `aegis/storage/keys.py` |
 
 > The intent-drift threshold is tuned for the bag-of-words stand-in embedder
 > (which under-scores related short texts); a production sentence-embedder uses a
