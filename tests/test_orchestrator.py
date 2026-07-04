@@ -28,7 +28,7 @@ def test_stage_exception_fails_closed(system, make_bundle, monkeypatch):
     # Simulate a dependency blowing up mid-pipeline: must resolve to BLOCK.
     import aegis.pipeline.f2_sanctions as f2
 
-    def boom(ctx):
+    def boom(ctx, provider):
         raise RuntimeError("sanctions feed unavailable")
 
     monkeypatch.setattr(f2, "run", boom)

@@ -11,10 +11,12 @@ Sequenced by dependency; checkboxes track shipped work.
       (chain verified on startup, fail-closed on corruption); durable velocity
       counters; cross-restart deterministic replay; per-decision evidence
       export verifiable with only the public key
-- [ ] **WS2 Real sanctions data plane**: pluggable `ScreeningProvider`
+- [x] **WS2 Real sanctions data plane**: pluggable `ScreeningProvider`
       interface; offline fixture provider; OpenSanctions/yente provider;
       Moov Watchman provider; list provenance recorded in every verdict;
       **stale list ⇒ fail closed** with a distinct reason code
+      (still open from WS2: matcher precision/recall benchmark on real
+      OpenSanctions names with per-script threshold tuning)
 
 ## Phase 2 — Conformance and evidence
 

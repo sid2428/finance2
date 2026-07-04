@@ -25,6 +25,7 @@ from ..ledger.evidence import export_evidence
 from ..models import MandateBundle, Verdict
 from ..pipeline.f5_risk_stepup import verify_quorum
 from ..runtime import AegisSystem, build_system
+from ..screening import provider_from_env
 
 
 class StepUpApproval(BaseModel):
@@ -34,7 +35,11 @@ class StepUpApproval(BaseModel):
 
 def create_app(system: AegisSystem | None = None) -> FastAPI:
     # AEGIS_DATA_DIR selects durable mode (WS3); unset = in-memory demo mode.
-    system = system or build_system(os.environ.get("AEGIS_DATA_DIR") or None)
+    # AEGIS_SCREENING_PROVIDER selects the screening data plane (WS2).
+    system = system or build_system(
+        os.environ.get("AEGIS_DATA_DIR") or None,
+        screening=provider_from_env(),
+    )
     app = FastAPI(title="AEGIS", version="0.1.0")
     app.state.aegis = system
 

@@ -58,6 +58,7 @@ def build_envelope(ctx: DecisionContext, verdict: Verdict) -> DecisionEnvelope:
         signals=list(ctx.signals),
         risk_score=round(ctx.risk_score, 2),
         model_provenance=dict(ctx.models_used),
+        screening=ctx.screening_provenance,
         liability=ctx.liability,
         liability_basis=ctx.liability_basis,
         stepup=ctx.stepup,

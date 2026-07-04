@@ -180,6 +180,9 @@ class DecisionEnvelope(BaseModel):
     signals: list[Signal] = Field(default_factory=list)
     risk_score: float = 0.0
     model_provenance: dict[str, str] = Field(default_factory=dict)
+    # Screening list provenance (provider/dataset/version/generated_at) — part
+    # of the signed payload, so the data plane a verdict relied on is attested.
+    screening: Optional[dict] = None
     liability: dict[str, float] = Field(default_factory=dict)
     liability_basis: str = ""
     stepup: Optional[StepUpChallenge] = None

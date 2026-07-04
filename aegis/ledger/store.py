@@ -13,7 +13,7 @@ must fail closed on its own corruption.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -39,6 +39,10 @@ class EvaluationArchive:
     now: float
     controls: dict
     velocity_snapshot: dict
+    # Recorded screening responses + provenance (WS2), so replay reuses the
+    # exact provider answers instead of making a live call. Defaulted for
+    # archives written before this field existed.
+    screening_snapshot: dict = field(default_factory=dict)
 
 
 class DecisionLedger:

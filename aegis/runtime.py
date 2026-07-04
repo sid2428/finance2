@@ -24,6 +24,7 @@ from .ap2.scope_ledger import MemoryScopeStore
 from .crypto import KeyRing, generate_keypair
 from .ledger import DecisionLedger
 from .pipeline import Orchestrator
+from .screening import ScreeningProvider
 from .state import StepUpStore, VelocityStore
 from .storage import (
     PersistentKeyRing,
@@ -57,7 +58,8 @@ class AegisSystem:
                 close()
 
 
-def build_system(data_dir: Optional[Path | str] = None) -> AegisSystem:
+def build_system(data_dir: Optional[Path | str] = None,
+                 screening: Optional[ScreeningProvider] = None) -> AegisSystem:
     if data_dir is None:
         keyring = KeyRing()
         signing_key, signing_pub = generate_keypair()
@@ -83,6 +85,7 @@ def build_system(data_dir: Optional[Path | str] = None) -> AegisSystem:
         keyring=keyring,
         velocity_store=velocity,
         stepup_store=stepup,
+        screening=screening,
     )
     return AegisSystem(
         keyring=keyring,

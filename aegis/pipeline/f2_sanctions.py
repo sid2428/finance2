@@ -1,12 +1,20 @@
 """Feature 2 — Sanctions & PEP Interdiction Engine.
 
 Screens every identity in the mandate chain (merchant legal name, beneficiary
-name/wallet, agent DIDs) against OFAC SDN / EU Consolidated / UN SC lists using
-Jaro-Winkler + phonetic matching, and applies the OFAC 50% Rule via the
-beneficial-ownership graph.
+name, intent beneficiary) through the configured ``ScreeningProvider`` (WS2),
+and applies the OFAC 50% Rule via the beneficial-ownership graph.
 
 A sanctions hit is a HARD BLOCK (regulatory strict liability). A PEP hit is
 NOT a block — it flags Enhanced Due Diligence (EDD) and raises risk.
+
+Data-plane fail-closed contract:
+  * provider unreachable  -> BLOCK, ``AGENT.SANC.PROVIDER_UNAVAILABLE``
+  * list data stale       -> BLOCK, ``AGENT.SANC.STALE_LIST``
+Nothing ever silently screens against old data or skips the screen.
+
+Every provider response and the list provenance are captured on the context,
+so the decision's archive replays the screen deterministically without a
+live provider call.
 """
 
 from __future__ import annotations
@@ -17,15 +25,12 @@ from ..config import (
     OFAC_OWNERSHIP_BLOCK_RATIO,
     PHONETIC_MATCH_BONUS,
     SANCTIONS_MATCH_THRESHOLD,
+    SCREENING_MAX_LIST_AGE_SECONDS,
 )
-from ..data import (
-    OwnershipGraph,
-    WatchlistEntry,
-    default_ownership_graph,
-    default_watchlist,
-)
+from ..data import OwnershipGraph, WatchlistEntry, default_ownership_graph
 from ..matching import jaro_winkler_similarity, phonetic_key
 from ..models import Severity, Signal
+from ..screening import ScreeningProvider, ScreeningUnavailable
 from .context import DecisionContext
 
 STAGE = "f2_sanctions"
@@ -39,6 +44,8 @@ class Hit:
 
 
 def screen_name(candidate: str, watchlist: list[WatchlistEntry]) -> list[Hit]:
+    """Direct fixture-watchlist matcher, kept for tests/tools; the pipeline
+    itself screens through the provider seam."""
     if not candidate:
         return []
     cand_phon = phonetic_key(candidate)
@@ -76,20 +83,64 @@ def _candidate_names(ctx: DecisionContext) -> list[str]:
     return unique
 
 
-def run(ctx: DecisionContext) -> None:
+def _unavailable(ctx: DecisionContext, exc: ScreeningUnavailable) -> None:
+    ctx.screening_error = str(exc)
+    ctx.add_signal(Signal(
+        code="AGENT.SANC.PROVIDER_UNAVAILABLE",
+        detail=f"screening provider unavailable — failing closed: {exc}",
+        severity=Severity.HIGH,
+        hard_block=True,
+        stage=STAGE,
+    ))
+
+
+def run(ctx: DecisionContext, provider: ScreeningProvider) -> None:
     ctx.controls.psp_ran_sanctions_screen = True  # this stage IS the screen
-    watchlist = default_watchlist()
-    graph = default_ownership_graph()
+
+    # Provenance first: no screen without knowing which data screens it.
+    try:
+        prov = provider.provenance()
+    except ScreeningUnavailable as exc:
+        _unavailable(ctx, exc)
+        return
+    ctx.screening_provenance = prov.as_dict()
+
+    # Freshness contract: stale list => fail closed with a distinct reason
+    # code, never silently screen against old data. Static fixture data
+    # (generated_at=None, offline demo provider) is exempt by design.
+    if (prov.generated_at is not None
+            and ctx.now - prov.generated_at > SCREENING_MAX_LIST_AGE_SECONDS):
+        age_h = (ctx.now - prov.generated_at) / 3600.0
+        ctx.add_signal(Signal(
+            code="AGENT.SANC.STALE_LIST",
+            detail=(
+                f"{prov.provider} dataset {prov.dataset!r} version "
+                f"{prov.dataset_version} is {age_h:.1f}h old (bound "
+                f"{SCREENING_MAX_LIST_AGE_SECONDS / 3600.0:.1f}h) — failing closed"
+            ),
+            severity=Severity.HIGH,
+            hard_block=True,
+            stage=STAGE,
+        ))
+        return
 
     # --- Name screening (sanctions = block, PEP = EDD) ---
     for name in _candidate_names(ctx):
-        for hit in screen_name(name, watchlist):
-            if hit.is_pep and hit.entry.list_name == "PEP":
+        try:
+            candidates = provider.screen(name)
+        except ScreeningUnavailable as exc:
+            _unavailable(ctx, exc)
+            return
+        ctx.screening_log[name] = [c.as_dict() for c in candidates]
+        for cand in candidates:
+            if cand.score < SANCTIONS_MATCH_THRESHOLD:
+                continue
+            if cand.is_pep:
                 ctx.add_signal(Signal(
                     code="AGENT.SANC.PEP_EDD",
                     detail=(
-                        f"'{name}' ~ PEP '{hit.entry.name}' "
-                        f"(score={hit.score:.3f}); enhanced due diligence required"
+                        f"'{name}' ~ PEP '{cand.name}' "
+                        f"(score={cand.score:.3f}); enhanced due diligence required"
                     ),
                     severity=Severity.MEDIUM,
                     hard_block=False,
@@ -101,9 +152,9 @@ def run(ctx: DecisionContext) -> None:
                 ctx.add_signal(Signal(
                     code="AGENT.SANC.SDN_HIT",
                     detail=(
-                        f"'{name}' matches {hit.entry.list_name} entry "
-                        f"'{hit.entry.name}' ({hit.entry.entity_id}) "
-                        f"score={hit.score:.3f}"
+                        f"'{name}' matches {cand.list_name} entry "
+                        f"'{cand.name}' ({cand.entity_id}) "
+                        f"score={cand.score:.3f}"
                     ),
                     severity=Severity.HIGH,
                     hard_block=True,
@@ -112,6 +163,7 @@ def run(ctx: DecisionContext) -> None:
                 return  # strict-liability hard block short-circuits
 
     # --- OFAC 50% Rule on the beneficiary entity, if identified by id ---
+    graph = default_ownership_graph()
     benef_id = None
     if ctx.bundle.cart.beneficiary and ctx.bundle.cart.beneficiary.account_ref:
         benef_id = ctx.bundle.cart.beneficiary.account_ref

@@ -48,6 +48,12 @@ class DecisionContext:
     # Prior velocity-window entries read by Feature 3, captured so a later
     # audit replay can reconstruct the exact sliding window deterministically.
     velocity_snapshot: dict = field(default_factory=dict)
+    # Screening evidence captured at decision time (WS2): list provenance goes
+    # into the signed envelope; the full provider responses go into the replay
+    # archive so audit replay never makes a live provider call.
+    screening_provenance: Optional[dict] = None
+    screening_log: dict = field(default_factory=dict)
+    screening_error: Optional[str] = None
 
     # Pinned snapshot hash (set in __post_init__).
     world_snapshot_hash: str = ""

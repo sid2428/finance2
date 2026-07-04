@@ -37,6 +37,13 @@ PHONETIC_MATCH_BONUS = 0.06
 # OFAC 50% Rule: block if aggregate sanctioned ownership >= this share.
 OFAC_OWNERSHIP_BLOCK_RATIO = 0.50
 
+# Screening data freshness (WS2): a verdict is never produced against stale
+# list data. If the provider's dataset is older than this bound the decision
+# FAILS CLOSED with AGENT.SANC.STALE_LIST (most screening tools fail open on
+# stale data; AEGIS does not). Static demo fixtures (generated_at=None) are
+# exempt — demo mode only.
+SCREENING_MAX_LIST_AGE_SECONDS = 7 * 24 * 3600
+
 # --- Feature 3: Structuring & Velocity ------------------------------------
 CTR_THRESHOLD_USD = 10_000.0            # US Currency Transaction Report (31 USC)
 STRUCTURING_WINDOW_SECONDS = 24 * 3600  # rolling 24h cluster window

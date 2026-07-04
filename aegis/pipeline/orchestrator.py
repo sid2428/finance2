@@ -17,6 +17,11 @@ from ..gateway.verify import verify_bundle
 from ..ledger import DecisionLedger, EvaluationArchive
 from ..ml import DriftEmbedder, RiskModel, default_embedder, default_risk_model
 from ..models import DecisionEnvelope, MandateBundle, Severity, Signal, Verdict
+from ..screening import (
+    OfflineFixtureProvider,
+    RecordedScreeningProvider,
+    ScreeningProvider,
+)
 from ..state import (
     StepUpStore,
     VelocityStore,
@@ -52,6 +57,7 @@ class Orchestrator:
         stepup_store: Optional[StepUpStore] = None,
         embedder: Optional[DriftEmbedder] = None,
         risk_model: Optional[RiskModel] = None,
+        screening: Optional[ScreeningProvider] = None,
     ):
         self.ledger = ledger
         self.keyring = keyring
@@ -59,6 +65,7 @@ class Orchestrator:
         self.stepup = stepup_store or default_stepup_store()
         self.embedder = embedder or default_embedder()
         self.risk_model = risk_model or default_risk_model()
+        self.screening = screening or OfflineFixtureProvider()
 
     # -- public API ------------------------------------------------------
     def evaluate(
@@ -84,7 +91,8 @@ class Orchestrator:
                 ))
                 return self._finalize(ctx, Verdict.BLOCK)
 
-            verdict = self._run_pipeline(ctx, self.velocity, record=True)
+            verdict = self._run_pipeline(ctx, self.velocity, self.screening,
+                                         record=True)
             return self._finalize(ctx, verdict)
 
         except Exception as exc:  # fail-closed: any error → BLOCK
@@ -102,9 +110,12 @@ class Orchestrator:
         controls = ControlEvidence(**archive.controls)
         ctx = DecisionContext(bundle=bundle, controls=controls, now=archive.now)
 
-        # Isolated velocity store seeded to reproduce the exact window.
+        # Isolated velocity store seeded to reproduce the exact window, and a
+        # recorded screening provider so replay never makes a live data-plane
+        # call — the decision is re-derived from archived inputs alone.
         iso_store = VelocityStore()
         iso_store.seed(archive.velocity_snapshot)
+        recorded = RecordedScreeningProvider(archive.screening_snapshot)
 
         ok, code, detail = verify_bundle(bundle, self.keyring.public_key)
         if not ok:
@@ -114,7 +125,7 @@ class Orchestrator:
             ))
             verdict = Verdict.BLOCK
         else:
-            verdict = self._run_pipeline(ctx, iso_store, record=False)
+            verdict = self._run_pipeline(ctx, iso_store, recorded, record=False)
 
         f6.run(ctx)
         reproduced = f7.build_envelope(ctx, verdict)
@@ -132,13 +143,14 @@ class Orchestrator:
 
     # -- internals -------------------------------------------------------
     def _run_pipeline(
-        self, ctx: DecisionContext, store: VelocityStore, record: bool
+        self, ctx: DecisionContext, store: VelocityStore,
+        screening: ScreeningProvider, record: bool
     ) -> Verdict:
         # Hard-block stages (short-circuit on any hard block).
         f1.run(ctx)
         if ctx.has_hard_block:
             return Verdict.BLOCK
-        f2.run(ctx)
+        f2.run(ctx, screening)
         if ctx.has_hard_block:
             return Verdict.BLOCK
         f3.run(ctx, store)
@@ -158,6 +170,11 @@ class Orchestrator:
             now=ctx.now,
             controls=dict(ctx.controls.__dict__),
             velocity_snapshot=ctx.velocity_snapshot,
+            screening_snapshot={
+                "provenance": ctx.screening_provenance,
+                "queries": ctx.screening_log,
+                "error": ctx.screening_error,
+            },
         )
         self.ledger.append(env, archive)
         if verdict == Verdict.STEP_UP and ctx.stepup is not None:
