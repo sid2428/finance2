@@ -54,6 +54,7 @@ def test_stepup_approve_reaches_quorum(client_system):
         sys_.keyring,
         total_usd=6500.0,
         max_value_usd=9000.0,
+        human_present=True,   # attended: this test exercises quorum mechanics
         buyer_did="did:aegis:buyer-z",
         initiator_did="did:aegis:buyer-z",
         beneficiary=Party(legal_name="Bright Beans Coffee Ltd", account_ref="acct-2"),

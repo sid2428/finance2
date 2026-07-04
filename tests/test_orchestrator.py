@@ -73,6 +73,7 @@ def test_settlement_refused_for_stepup_without_quorum(system, make_bundle):
     b = make_bundle(
         total_usd=6500.0,
         max_value_usd=9000.0,
+        human_present=True,   # attended: this test exercises quorum mechanics
         buyer_did="did:aegis:buyer-x",
         initiator_did="did:aegis:buyer-x",
         beneficiary=Party(legal_name="Bright Beans Coffee Ltd", account_ref="acct-2"),

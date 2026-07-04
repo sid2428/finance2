@@ -20,11 +20,14 @@ Sequenced by dependency; checkboxes track shipped work.
 
 ## Phase 2 — Conformance and evidence
 
-- [ ] **WS1 AP2 v0.2 conformance**: conformance matrix (conformant / divergent
+- [x] **WS1 AP2 v0.2 conformance**: conformance matrix (conformant / divergent
       / absent per spec field); Human-Not-Present mandate policy path (higher
       baseline risk, mandatory scope-ledger enforcement, stricter step-up);
       formal adapter interface + AP2/ACP/x402 adapter design docs;
       `CONFORMANCE.md` changelog tracking WG output
+      (still open from WS1: ES256/P-256 suite, HNP derived from closed-mandate
+      signer, replaying the FIDO reference repo's sample SD-JWTs — tracked in
+      CONFORMANCE.md gap log)
 - [ ] **WS7 Benchmarks**: harness with per-stage latency percentiles on real
       backends; degradation semantics as a named invariant with fault-injection
       tests; CI perf smoke test; honest `BENCHMARKS.md`

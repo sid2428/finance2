@@ -69,6 +69,19 @@ INTENT_DRIFT_THRESHOLD = 0.85
 RISK_LOW_BAND = 40.0
 RISK_STEPUP_BAND = 75.0
 
+# --- AP2 v0.2 Human-Not-Present policy path (WS1) ---------------------------
+# HNP (autonomous mode: the agent signs the closed mandates; no human confirmed
+# THIS transaction) is the mode regulators scrutinize first. AEGIS therefore:
+#   * adds a baseline risk contribution the moment human_present is false,
+#   * tightens both verdict bands (step-up starts sooner, block starts sooner),
+#   * refuses unbounded delegated authority outright: an HNP payment whose
+#     intent carries no max_value_usd fails closed (AGENT.HNP.UNBOUNDED_AUTHORITY)
+#     — autonomous spend requires an explicit, user-approved value bound,
+#     mirroring AP2's open-mandate constraint model.
+HNP_BASELINE_RISK = 10.0
+HNP_RISK_LOW_BAND = 25.0     # attended: 40 — HNP step-up starts sooner
+HNP_RISK_STEPUP_BAND = 65.0  # attended: 75 — HNP block starts sooner
+
 # --- Feature 6: Liability floors ------------------------------------------
 # Reg E / Reg Z consumer-protection floor: a consumer's apportioned share of an
 # *unauthorized* transaction is capped here regardless of control failures.
