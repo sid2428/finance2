@@ -66,6 +66,10 @@ class Orchestrator:
         self.embedder = embedder or default_embedder()
         self.risk_model = risk_model or default_risk_model()
         self.screening = screening or OfflineFixtureProvider()
+        # Observational per-stage wall-clock timings for the most recent
+        # evaluate() call (WS7 benchmarks). Never part of the envelope or the
+        # replay archive — timing is telemetry, not evidence.
+        self.last_stage_timings: dict[str, float] = {}
 
     # -- public API ------------------------------------------------------
     def evaluate(
@@ -83,7 +87,10 @@ class Orchestrator:
             )
 
             # Gate 0: signature verification.
+            self.last_stage_timings = timings = {}
+            t0 = time.perf_counter()
             ok, code, detail = verify_bundle(bundle, self.keyring.public_key)
+            timings["verify_signatures"] = time.perf_counter() - t0
             if not ok:
                 ctx.add_signal(Signal(
                     code=code, detail=detail, severity=Severity.HIGH,
@@ -92,8 +99,11 @@ class Orchestrator:
                 return self._finalize(ctx, Verdict.BLOCK)
 
             verdict = self._run_pipeline(ctx, self.velocity, self.screening,
-                                         record=True)
-            return self._finalize(ctx, verdict)
+                                         record=True, timings=timings)
+            t0 = time.perf_counter()
+            env = self._finalize(ctx, verdict)
+            timings["finalize_sign_append"] = time.perf_counter() - t0
+            return env
 
         except Exception as exc:  # fail-closed: any error → BLOCK
             return self._finalize_failclosed(bundle, ctx, exc)
@@ -144,25 +154,48 @@ class Orchestrator:
     # -- internals -------------------------------------------------------
     def _run_pipeline(
         self, ctx: DecisionContext, store: VelocityStore,
-        screening: ScreeningProvider, record: bool
+        screening: ScreeningProvider, record: bool,
+        timings: Optional[dict] = None,
     ) -> Verdict:
+        def timed(name, fn, *args):
+            t0 = time.perf_counter()
+            try:
+                return fn(*args)
+            finally:
+                if timings is not None:
+                    timings[name] = time.perf_counter() - t0
+
         # Hard-block stages (short-circuit on any hard block).
-        f1.run(ctx)
+        timed("f1_jurisdiction", f1.run, ctx)
         if ctx.has_hard_block:
             return Verdict.BLOCK
-        f2.run(ctx, screening)
+        timed("f2_sanctions", f2.run, ctx, screening)
         if ctx.has_hard_block:
             return Verdict.BLOCK
-        f3.run(ctx, store)
+        timed("f3_structuring", f3.run, ctx, store)
         if ctx.has_hard_block:
             return Verdict.BLOCK
-        f4.run(ctx, self.embedder)
+        timed("f4_adversarial", f4.run, ctx, self.embedder)
         if ctx.has_hard_block:
             return Verdict.BLOCK
         # Graduated resolution.
-        return f5.run(ctx, self.risk_model)
+        return timed("f5_risk_stepup", f5.run, ctx, self.risk_model)
 
     def _finalize(self, ctx: DecisionContext, verdict: Verdict) -> DecisionEnvelope:
+        # NO-SILENT-SKIP invariant (WS7 degradation semantics): a decision may
+        # only clear the gate with attested screening provenance. A non-BLOCK
+        # verdict without it means a pipeline stage was bypassed (bug, bad
+        # patch, partial deploy) — resolve to BLOCK, loudly.
+        if verdict != Verdict.BLOCK and ctx.screening_provenance is None:
+            ctx.add_signal(Signal(
+                code="AGENT.SYS.STAGE_SKIPPED",
+                detail="no screening provenance on a non-BLOCK verdict — "
+                       "a pipeline stage was bypassed; failing closed",
+                severity=Severity.HIGH,
+                hard_block=True,
+                stage="orchestrator",
+            ))
+            verdict = Verdict.BLOCK
         f6.run(ctx)
         env = f7.build_envelope(ctx, verdict)
         archive = EvaluationArchive(

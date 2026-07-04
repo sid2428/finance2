@@ -44,6 +44,11 @@ jobs:
           python -m demo.demo
           python -m demo.advanced_demo
 
+      # Perf visibility (WS7): the hard regression guard is the perf smoke
+      # test inside the suite; this step publishes the numbers per run.
+      - name: Benchmark (advisory)
+        run: python -m aegis.tools.bench --n 300
+
   audit:
     name: dependency audit
     runs-on: ubuntu-latest

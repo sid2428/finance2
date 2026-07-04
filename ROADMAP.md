@@ -28,7 +28,7 @@ Sequenced by dependency; checkboxes track shipped work.
       (still open from WS1: ES256/P-256 suite, HNP derived from closed-mandate
       signer, replaying the FIDO reference repo's sample SD-JWTs — tracked in
       CONFORMANCE.md gap log)
-- [ ] **WS7 Benchmarks**: harness with per-stage latency percentiles on real
+- [x] **WS7 Benchmarks**: harness with per-stage latency percentiles on real
       backends; degradation semantics as a named invariant with fault-injection
       tests; CI perf smoke test; honest `BENCHMARKS.md`
 
